@@ -70,7 +70,7 @@ function Reporter(runner, mocha) {
 
   runner.stats = stats;
 
-  this.files = mocha.files;
+  //this.files = mocha.files;
   this.filesCache = {};
 
   runner.on('start', function() {
@@ -242,7 +242,7 @@ Reporter.prototype.writeFailures = function(failures) {
           lineNumber = parsedStack[i].getLineNumber(),
         columnNumber = parsedStack[i].getColumnNumber();
 
-      if(lineNumber != null && this.files.indexOf(fileName) >= 0) {
+      if(lineNumber != null/* && this.files.indexOf(fileName) >= 0*/) {
         if(!this.filesCache[fileName]) {
           try {
             this.filesCache[fileName] = fs.readFileSync(fileName, { encoding: 'utf8' }).split('\n');
