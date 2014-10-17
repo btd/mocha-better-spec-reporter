@@ -1,12 +1,19 @@
 mocha-better-spec-reporter
 ==========================
 
-Just a fork of mocha spec reporter, but with small goodies
+Originally it was fork for mocha own spec reporter, but it is very inconvinent to use.
+So i fork it and rewrite adding missing things.
+When output stack traces this reporter show lines from files and do not show stack after test files to do not pollute output.
+
+It is possible to hide some parts of output via env variable MOCHA_REPORTER_OPTS.
+
+`hide-titles` - will hide execution tests/suites titles
+
+`hide-stats` - will hide stat
 
 
 How to use
 =======
-
 
 ```
 npm install --save-dev mocha-better-spec-reporter
@@ -18,4 +25,4 @@ mocha --reporter mocha-better-spec-reporter ... # and other options there
 
 Screenshot
 ==========
-![screenshot](https://f.cloud.github.com/assets/334851/2219225/fb1855f8-9a3c-11e3-9f9a-7656611ca438.png)
+![screenshot](https://cloud.githubusercontent.com/assets/334851/4676893/a6951042-55e0-11e4-812d-04fe09241d6a.png)

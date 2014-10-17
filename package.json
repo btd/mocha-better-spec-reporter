@@ -1,10 +1,10 @@
 {
   "name": "mocha-better-spec-reporter",
-  "version": "0.0.2",
+  "version": "1.0.0",
   "description": "Just a bit better spec reporter for Mocha",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "mocha -R ../../../ test.js"
   },
   "keywords": [
     "mocha",
@@ -14,8 +14,12 @@
   "author": "Denis Bardadym <bardadymchik@gmail.com>",
   "license": "MIT",
   "dependencies": {
-    "stack-trace": "0.0.9",
+    "chalk": "^0.5.1",
     "diff": "^1.0.8",
-    "chalk": "^0.4.0"
+    "graceful-fs": "^3.0.4",
+    "stack-trace": "0.0.9"
+  },
+  "devDependencies": {
+    "mocha": "latest"
   }
 }

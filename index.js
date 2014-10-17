@@ -2,75 +2,42 @@ var chalk = require('chalk'),
   util = require('util'),
   diff = require('diff'),
   stacktrace = require('stack-trace'),
-  fs = require('fs');
+  fs = require('graceful-fs');
 
-var symbols = {
-  ok: '✓',
-  err: '✖',
-  dot: '․'
-};
+var config = require('./config');
+var symbols = config.symbols;
 
-// With node.js on Windows: use symbols available in terminal default fonts
-if('win32' == process.platform) {
-  symbols.ok = '\u221A';
-  symbols.err = '\u00D7';
-  symbols.dot = '.';
-}
+var color = require('./color');
+var formatTime = require('./time').formatTime;
 
-var options = {
-  colors: {
-    'suite title': 'bold.underline',
-    'pending': 'yellow',
-    'pass': 'green',
-    'fail': 'red.bold',
-    'checkmark': 'magenta',
-    'slow': 'red',
-    'medium': 'yellow',
-    'stat': 'blue',
-    'error title': 'underline',
-    'error stack': 'reset',
-    'error message': 'cyan',
-    'diff added': 'green',
-    'diff removed': 'red',
-    'pos': 'yellow'
-  },
-  indentation: 4,
-  stream: process.stdout
-};
+function parseEnvOptions() {
+  var v = process.env.MOCHA_REPORTER_OPTS,
+      res = {
+        hideTitles: false,
+        hideStats: false
+      };
+  if(v) {
+    res.hideTitles = ~v.indexOf('hide-titles');
+    res.hideStats = ~v.indexOf('hide-stats');
 
-function prepareColor(color) {
-  var splitted = color.split('.');
-  var style = chalk;
-  while(splitted.length) style = style[splitted.shift()];
-  return style;
-}
-
-function prepareColors(colors) {
-  for(var name in colors) {
-    colors[name] = prepareColor(colors[name]);
   }
+  return res;
 }
 
-prepareColors(options.colors);
-
-function color(name) {
-  var args = Array.prototype.slice.call(arguments, 1);
-  return options.colors[name].apply(null, args);
-}
-
-function Reporter(runner, mocha) {
-  var that = this,
-    stats = this.stats = { suites: 0, tests: 0, passes: 0, pending: 0, failures: 0 },
-    failures = this.failures = [];
-
-  this.indentationLevel = 0;
-
+function Reporter(runner, mochaOptions) {
   if(!runner) return;
   this.runner = runner;
 
-  runner.stats = stats;
+  var that = this;
 
-  //this.files = mocha.files;
+  this.options = parseEnvOptions();
+
+  var stats = this.stats = { suites: 0, tests: 0, passes: 0, pending: 0, failures: 0, timeouts: 0 };
+  var failures = this.failures = [];
+
+  this.indentation = 0;
+
+  this.files = mochaOptions.files;
   this.filesCache = {};
 
   runner.on('start', function() {
@@ -78,131 +45,127 @@ function Reporter(runner, mocha) {
   });
 
   runner.on('suite', function(suite) {
-    stats.suites = stats.suites || 0;
-    suite.root || stats.suites++;
+    if(!suite.root) {
+      stats.suites++;
+      that.indentation++;
 
-    that.indentationLevel++;
-    that.writeLine(color('suite title', suite.title));
+      if(!that.options.hideTitles) {
+        that.writeLine();
+        that.writeLine('%s', color('suite title', suite.title));
+      }
+    }
   });
 
   runner.on('suite end', function(suite) {
-    that.indentationLevel--;
-    if(1 == that.indentationLevel) that.writeLine();
+    if(!suite.root) {
+      that.indentation--;
+    }
+  });
+
+  runner.on('test end', function(test) {
+    stats.tests++;
+  });
+
+  runner.on('pass', function(test) {
+    stats.passes++;
+
+    that.writeTest(test);
+  });
+
+  runner.on('fail', function(test, err) {
+    test.err = err;
+    test.timedOut = test.duration >= test.timeout();
+    if(test.timedOut) stats.timeouts++;
+    failures.push(test);
+
+    that.writeTest(test);
   });
 
   runner.on('pending', function(test) {
     stats.pending++;
 
-    that.writeLine(color('pending', '- %s'), test.title);
-  });
-
-  runner.on('test end', function(test) {
-    stats.tests = stats.tests || 0;
-    stats.tests++;
-  });
-
-  runner.on('pass', function(test) {
-    stats.passes = stats.passes || 0;
-
-    var medium = test.slow() / 2;
-    test.speed = test.duration > test.slow()
-      ? 'slow'
-      : test.duration > medium
-      ? 'medium'
-      : 'fast';
-
-    stats.passes++;
-
-    if('fast' == test.speed) {
-      that.writeLine('  ' + color('checkmark', symbols.ok) + color('pass', ' %s'), test.title);
-    } else {
-      that.writeLine('  ' + color('checkmark', symbols.ok) + color('pass', ' %s ') + color(test.speed, '(%dms)'), test.title, test.duration);
-    }
-  });
-
-  runner.on('fail', function(test, err) {
-    stats.failures = stats.failures || 0;
-    stats.failures++;
-    test.err = err;
-    failures.push(test);
-
-    that.writeLine('  ' + color('fail', '%d) %s'), failures.length, test.title);
+    that.writeTest(test);
   });
 
   runner.on('end', function() {
-    stats.end = new Date;
-    stats.duration = new Date - stats.start;
+    //console.log(runner);
 
-    that.writeLine();
-    that.writeStat(stats);
+    stats.end = new Date;
+    stats.duration = stats.end - stats.start;
+
+    that.indentation = 0;
+
+    if(!that.options.hideTitles) {
+      that.writeLine();
+    }
+
+    if(!that.options.hideStats) {
+      that.writeStat(stats);
+    }
+
     if(failures.length) that.writeFailures(failures);
   });
 }
 
-function formatTime(ms) {
-  var time = [];
-  var days = Math.floor(ms / 1000 / 60 / 60 / 24);
-  if(days >= 1) {
-    time.push(days + 'd');
-    ms -= days * (1000 * 60 * 60 * 24);
+
+Reporter.prototype.writeTest = function writeTest(test) {
+  var state = test.pending ? 'pending': test.state;
+  var prefix = symbols[state];
+  if(state == 'failed') {
+    prefix = '' + (this.stats.failures + 1) + ')';
+    this.stats.failures++;
   }
-  var hours = Math.floor(ms / 1000 / 60 / 60);
-  if(hours >= 1) {
-    time.push(hours + 'h');
-    ms -= hours * (1000 * 60 * 60);
+  this.indentation += 0.5;
+
+  if(!this.options.hideTitles) {
+    this.writeLine(
+        '%s %s',
+        color('option ' + state, prefix),
+        color('test title ' + state, test.title + (test.timedOut ? ' (timeout)' : '')));
   }
-  var minutes = Math.floor(ms / 1000 / 60);
-  if(minutes >= 1) {
-    time.push(minutes + 'm');
-    ms -= minutes * (1000 * 60);
-  }
-  var seconds = Math.floor(ms / 1000);
-  if(seconds >= 1) {
-    time.push(seconds + 's');
-    ms -= seconds * (1000);
-  }
-  if(ms >= 1) {
-    time.push(ms + 'ms');
-  }
-  return time.join(' ');
+
+  this.indentation -= 0.5;
 }
 
-Reporter.prototype.write = function() {
-  var ident = new Array(options.indentation * this.indentationLevel).join(' ');
-  options.stream.write(ident + util.format.apply(util, arguments));
-};
+function indent(indentation) {
+  return new Array(Math.round(indentation * config.indentation)).join(' ');
+}
+
 
 Reporter.prototype.writeLine = function() {
-  var args = Array.prototype.slice.call(arguments);
-  args.push('\n');
-  this.write.apply(this, args);
+  config.stream.write(indent(this.indentation) + util.format.apply(util, arguments) + '\n');
 };
 
 Reporter.prototype.writeStat = function(stats) {
-  this.indentationLevel++;
+  this.indentation++;
   if(stats.suites) {
     this.writeLine(color('stat', 'Executed %d tests in %d suites in %s'), stats.tests, stats.suites, formatTime(stats.duration));
   } else {
     this.writeLine(color('stat', 'Executed %d tests in %s'), stats.tests, formatTime(stats.duration));
   }
-  this.indentationLevel++;
+  this.indentation++;
   if(stats.tests == stats.passes)
     this.writeLine(color('pass','All passes'));
   else {
     this.writeLine(color('pass', '%d passes'), stats.passes);
     if(stats.pending)
       this.writeLine(color('pending', '%d pending'), stats.pending);
-    if(stats.failures)
-      this.writeLine(color('fail', '%d failed'), stats.failures);
+    if(stats.failures) {
+      if(stats.timeouts)
+        this.writeLine(color('fail', '%d failed (%d timed out)'), stats.failures, stats.timeouts);
+      else
+        this.writeLine(color('fail', '%d failed'), stats.failures);
+    }
   }
-  this.indentationLevel -= 2;
+  this.indentation -= 2;
 };
 
 
 Reporter.prototype.writeFailures = function(failures) {
-  this.indentationLevel++;
+  this.indentation++;
 
   failures.forEach(function(test, i) {
+
     var err = test.err,
       message = err.message,
       stack = err.stack,
@@ -225,51 +188,108 @@ Reporter.prototype.writeFailures = function(failures) {
     this.writeLine('%d) ' + color('error title', '%s'), i+1, test.fullTitle());
     this.writeLine();
 
-    this.indentationLevel++;
+    this.indentation++;
     this.writeLine(color('error message', '%s'), message);
 
-    // actual / expected diff
-    if ('string' == typeof actual && 'string' == typeof expected) {
-      this.writeDiff(actual, expected, escape);
+    if(!test.timedOut) {
+
+      // actual / expected diff
+      if ('string' == typeof actual && 'string' == typeof expected) {
+        this.writeDiff(actual, expected, escape);
+      }
+
+      this.writeLine();
+
+      var isFilesBeforeTests = true, isTestFiles = true;
+
+      stack
+          .filter(function (l) {
+            return l.length > 0;
+          })
+          .forEach(function (line, i) {
+            var fileName = parsedStack[i].getFileName(),
+                lineNumber = parsedStack[i].getLineNumber(),
+                columnNumber = parsedStack[i].getColumnNumber();
+
+            if(~this.files.indexOf(fileName)) {
+              isTestFiles = true;
+              isFilesBeforeTests = false;
+            } else {
+              isTestFiles = false;
+            }
+
+            if(isTestFiles || isFilesBeforeTests) {
+              this.writeLine(color('error stack', line));
+              this.writeStackLine(line, fileName, lineNumber, columnNumber);
+            }
+          }, this);
     }
 
-    this.writeLine();
-
-    stack.filter(function(l) { return l.length > 0; }).forEach(function(line, i) {
-      this.writeLine(color('error stack', line));
-
-      var fileName = parsedStack[i].getFileName(),
-          lineNumber = parsedStack[i].getLineNumber(),
-        columnNumber = parsedStack[i].getColumnNumber();
-
-      if(lineNumber != null/* && this.files.indexOf(fileName) >= 0*/) {
-        if(!this.filesCache[fileName]) {
-          try {
-            this.filesCache[fileName] = fs.readFileSync(fileName, { encoding: 'utf8' }).split('\n');
-          } catch(e) {}
-        }
-        if(this.filesCache[fileName]) {
-          var lines = this.filesCache[fileName];
-          var exactLine = lines[lineNumber - 1];
-          this.writeLine();
-          this.writeLine(color('pos', '%d') + ' | %s', lineNumber, exactLine);
-          if(columnNumber != null) {
-            var prefixLength = ('' + lineNumber + ' | ').length;
-            var padding = new Array(prefixLength + exactLine.length);
-            padding[prefixLength + columnNumber - 1] = color('pos', '^');
-            this.writeLine(padding.join(' '));
-          } else {
-            this.writeLine();
-          }
-        }
-      }
-    }, this);
-
-    this.indentationLevel--;
+    this.indentation--;
 
   }, this);
-  this.indentationLevel--;
+  this.indentation--;
 };
+
+Reporter.prototype.writeStackLineOld = function(line, fileName, lineNumber, columnNumber) {
+  if (lineNumber != null) {
+    if (!this.filesCache[fileName]) {
+      try {
+        this.filesCache[fileName] = fs.readFileSync(fileName, {encoding: 'utf8'}).split('\n');
+      } catch (e) {
+      }
+    }
+    if (this.filesCache[fileName]) {
+      var lines = this.filesCache[fileName];
+      var exactLine = lines[lineNumber - 1];
+      this.writeLine();
+      this.writeLine(color('pos', '%d') + ' | %s', lineNumber, exactLine);
+      if (columnNumber != null) {
+        var prefixLength = ('' + lineNumber + ' | ').length;
+        var padding = new Array(prefixLength + exactLine.length);
+        padding[prefixLength + columnNumber - 1] = color('pos', '^');
+        this.writeLine(padding.join(' '));
+      } else {
+        this.writeLine();
+      }
+    }
+  }
+}
+
+Reporter.prototype.writeStackLine = function(line, fileName, lineNumber, columnNumber) {
+  if (lineNumber != null) {
+    if (!this.filesCache[fileName]) {
+      try {
+        this.filesCache[fileName] = fs.readFileSync(fileName, {encoding: 'utf8'}).split('\n');
+      } catch (e) {
+      }
+    }
+    if (this.filesCache[fileName]) {
+      var lines = this.filesCache[fileName];
+
+      this.writeLine();
+
+      [lineNumber - 2, lineNumber - 1, lineNumber].forEach(function(ln) {
+        var line = lines[ln];
+
+        if(line) {
+          if(ln + 1 == lineNumber) {
+            if(columnNumber) {
+              var lineBefore = line.substr(0, columnNumber - 1);
+              var lineAfter = line.substr(columnNumber);
+              line = lineBefore + color('error line pos', line[columnNumber - 1]) + lineAfter;
+            }
+            this.writeLine('%s | %s', color('error line pos', ln + 1), line);
+          } else {
+            this.writeLine('%s | %s', ln + 1, line);
+          }
+        }
+      }, this);
+
+      this.writeLine();
+    }
+  }
+}
 
 function canonicalize(obj, stack) {
   stack = stack || [];
