@@ -10,6 +10,8 @@ var symbols = config.symbols;
 var color = require('./color');
 var formatTime = require('./time').formatTime;
 
+var pad = require('./pad');
+
 function parseEnvOptions() {
   var v = process.env.MOCHA_REPORTER_OPTS,
       res = {
@@ -271,7 +273,16 @@ Reporter.prototype.writeStackLine = function(line, fileName, lineNumber, columnN
 
       this.writeLine();
 
-      [lineNumber - 2, lineNumber - 1, lineNumber].forEach(function(ln) {
+      var linenums = [lineNumber - 2, lineNumber - 1, lineNumber];
+
+      var longestLength = linenums
+        .filter(function(n) { return !!lines[n]})
+        .map(function(n) {
+          return ('' + (n + 1)).length;
+        })
+        .reduce(function(acc, n) { return Math.max(acc, n) });// O_O Omg
+
+      linenums.forEach(function(ln) {
         var line = lines[ln];
 
         if(line) {
@@ -281,9 +292,9 @@ Reporter.prototype.writeStackLine = function(line, fileName, lineNumber, columnN
               var lineAfter = line.substr(columnNumber);
               line = lineBefore + color('error line pos', line[columnNumber - 1]) + lineAfter;
             }
-            this.writeLine('%s | %s', color('error line pos', ln + 1), line);
+            this.writeLine('%s | %s', color('error line pos', pad('' + (ln + 1), longestLength)), line);
           } else {
-            this.writeLine('%s | %s', ln + 1, line);
+            this.writeLine('%s | %s', pad('' + (ln + 1), longestLength), line);
           }
         }
       }, this);
