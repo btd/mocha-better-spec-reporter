@@ -1,6 +1,6 @@
 {
   "name": "mocha-better-spec-reporter",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Just a bit better spec reporter for Mocha",
   "main": "index.js",
   "scripts": {
