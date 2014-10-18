@@ -13,17 +13,14 @@ var formatTime = require('./time').formatTime;
 var pad = require('./pad');
 
 function parseEnvOptions() {
-  var v = process.env.MOCHA_REPORTER_OPTS,
-      res = {
-        hideTitles: false,
-        hideStats: false
-      };
-  if(v) {
-    res.hideTitles = ~v.indexOf('hide-titles');
-    res.hideStats = ~v.indexOf('hide-stats');
-
-  }
-  return res;
+  var
+    v = process.env.MOCHA_REPORTER_OPTS || '',
+    s = process.env.MOCHA_REPORTER_STACK_EXCLUDE;
+  return {
+      stackExclude: s ? new RegExp(s) : undefined,
+      hideTitles: ~v.indexOf('hide-titles'),
+      hideStats: ~v.indexOf('hide-stats')
+    };
 }
 
 function Reporter(runner, mochaOptions) {
@@ -222,7 +219,7 @@ Reporter.prototype.writeFailures = function(failures) {
               isTestFiles = false;
             }
 
-            if(isTestFiles || isFilesBeforeTests) {
+            if((isTestFiles || isFilesBeforeTests) && (!this.options.stackExclude || !fileName.match(this.options.stackExclude))) {
               this.writeLine(color('error stack', line));
               this.writeStackLine(line, fileName, lineNumber, columnNumber);
             }
