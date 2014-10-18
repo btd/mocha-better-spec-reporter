@@ -189,7 +189,9 @@ Reporter.prototype.writeFailures = function(failures) {
     this.writeLine();
 
     this.indentation++;
-    this.writeLine(color('error message', '%s'), message);
+    message.split('\n').forEach(function(messageLine) {
+      this.writeLine(color('error message', '%s'), messageLine);
+    }, this);
 
     if(!test.timedOut) {
 
