@@ -4,6 +4,8 @@ var diff = require('diff');
 var stacktrace = require('stack-trace');
 var fs = require('graceful-fs');
 
+var minimatch = require('minimatch');
+
 var getType = require('should-type');
 var format = require('should-format');
 
@@ -15,15 +17,34 @@ var formatTime = require('./time').formatTime;
 
 var pad = require('./pad');
 
-function parseEnvOptions() {
-  var
-    v = process.env.MOCHA_REPORTER_OPTS || '',
+function parseEnvOptions(opts) {
+  var v = process.env.MOCHA_REPORTER_OPTS || '',
     s = process.env.MOCHA_REPORTER_STACK_EXCLUDE;
-  return {
-    stackExclude: s ? new RegExp(s) : undefined,
-    hideTitles: ~v.indexOf('hide-titles'),
-    hideStats: ~v.indexOf('hide-stats')
-  };
+
+  if(s) {
+    opts.stackExclude = s;
+  }
+
+  opts.hideTitles = ~v.indexOf('hide-titles');
+  opts.hideStats = ~v.indexOf('hide-stats');
+
+  return opts;
+}
+
+function parseMochaReporterOptions(opts, reporterOptions) {
+  if('hide-titles' in reporterOptions)
+    opts.hideTitles = reporterOptions['hide-titles'] === 'true';
+
+  if('hide-stats' in reporterOptions)
+    opts.hideStats = reporterOptions['hide-stats'] === 'true';
+
+  if('stack-exclude' in reporterOptions)
+    opts.stackExclude = reporterOptions['stack-exclude'];
+
+  if('show-back-order' in reporterOptions)
+    opts.showFailsInBackOrder = reporterOptions['show-back-order'] === 'true';
+
+  return opts;
 }
 
 function Reporter(runner, mochaOptions) {
@@ -32,7 +53,10 @@ function Reporter(runner, mochaOptions) {
 
   var that = this;
 
-  this.options = parseEnvOptions();
+  this.options = {};
+
+  this.options = parseEnvOptions(this.options);
+  this.options = parseMochaReporterOptions(this.options, mochaOptions.reporterOptions);
 
   var stats = this.stats = {suites: 0, tests: 0, passes: 0, pending: 0, failures: 0, timeouts: 0};
   var failures = this.failures = [];
@@ -127,7 +151,7 @@ Reporter.prototype.writeTest = function writeTest(test) {
   }
 
   this.indentation -= 0.5;
-}
+};
 
 function indent(indentation) {
   return new Array(Math.round(indentation * config.indentation)).join(' ');
@@ -165,14 +189,19 @@ Reporter.prototype.writeStat = function(stats) {
 Reporter.prototype.writeFailures = function(failures) {
   this.indentation++;
 
-  failures.forEach(function(test, i) {
+  if(this.options.showFailsInBackOrder)
+    failures = failures.reverse();
 
+  failures.forEach(function(test, i) {
     var err = test.err,
       message = err.message,
       stack = err.stack,
       actual = err.actual,
       expected = err.expected,
       escape = true;
+
+    if(this.options.showFailsInBackOrder)
+      i = failures.length - 1 - i;
 
     var parsedStack = stacktrace.parse(err);
 
@@ -223,7 +252,7 @@ Reporter.prototype.writeFailures = function(failures) {
             isTestFiles = false;
           }
 
-          if((isTestFiles || isFilesBeforeTests) && (!this.options.stackExclude || !fileName.match(this.options.stackExclude))) {
+          if((isTestFiles || isFilesBeforeTests) && (!this.options.stackExclude || !minimatch(fileName, this.options.stackExclude))) {
             this.writeLine(color('error stack', line));
             this.writeStackLine(line, fileName, lineNumber, columnNumber);
           }
