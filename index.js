@@ -1,8 +1,11 @@
-var chalk = require('chalk'),
-  util = require('util'),
-  diff = require('diff'),
-  stacktrace = require('stack-trace'),
-  fs = require('graceful-fs');
+var chalk = require('chalk');
+var util = require('util');
+var diff = require('diff');
+var stacktrace = require('stack-trace');
+var fs = require('graceful-fs');
+
+var getType = require('should-type');
+var format = require('should-format');
 
 var config = require('./config');
 var symbols = config.symbols;
@@ -17,10 +20,10 @@ function parseEnvOptions() {
     v = process.env.MOCHA_REPORTER_OPTS || '',
     s = process.env.MOCHA_REPORTER_STACK_EXCLUDE;
   return {
-      stackExclude: s ? new RegExp(s) : undefined,
-      hideTitles: ~v.indexOf('hide-titles'),
-      hideStats: ~v.indexOf('hide-stats')
-    };
+    stackExclude: s ? new RegExp(s) : undefined,
+    hideTitles: ~v.indexOf('hide-titles'),
+    hideStats: ~v.indexOf('hide-stats')
+  };
 }
 
 function Reporter(runner, mochaOptions) {
@@ -31,7 +34,7 @@ function Reporter(runner, mochaOptions) {
 
   this.options = parseEnvOptions();
 
-  var stats = this.stats = { suites: 0, tests: 0, passes: 0, pending: 0, failures: 0, timeouts: 0 };
+  var stats = this.stats = {suites: 0, tests: 0, passes: 0, pending: 0, failures: 0, timeouts: 0};
   var failures = this.failures = [];
 
   this.indentation = 0;
@@ -108,7 +111,7 @@ function Reporter(runner, mochaOptions) {
 
 
 Reporter.prototype.writeTest = function writeTest(test) {
-  var state = test.pending ? 'pending': test.state;
+  var state = test.pending ? 'pending' : test.state;
   var prefix = symbols[state];
   if(state == 'failed') {
     prefix = '' + (this.stats.failures + 1) + ')';
@@ -118,9 +121,9 @@ Reporter.prototype.writeTest = function writeTest(test) {
 
   if(!this.options.hideTitles) {
     this.writeLine(
-        '%s %s',
-        color('option ' + state, prefix),
-        color('test title ' + state, test.title + (test.timedOut ? ' (timeout)' : '')));
+      '%s %s',
+      color('option ' + state, prefix),
+      color('test title ' + state, test.title + (test.timedOut ? ' (timeout)' : '')));
   }
 
   this.indentation -= 0.5;
@@ -129,7 +132,6 @@ Reporter.prototype.writeTest = function writeTest(test) {
 function indent(indentation) {
   return new Array(Math.round(indentation * config.indentation)).join(' ');
 }
-
 
 Reporter.prototype.writeLine = function() {
   config.stream.write(indent(this.indentation) + util.format.apply(util, arguments) + '\n');
@@ -144,7 +146,7 @@ Reporter.prototype.writeStat = function(stats) {
   }
   this.indentation++;
   if(stats.tests == stats.passes)
-    this.writeLine(color('pass','All passes'));
+    this.writeLine(color('pass', 'All passes'));
   else {
     this.writeLine(color('pass', '%d passes'), stats.passes);
     if(stats.pending)
@@ -175,16 +177,18 @@ Reporter.prototype.writeFailures = function(failures) {
     var parsedStack = stacktrace.parse(err);
 
     var index = stack.indexOf(message);
-    stack = stack.substr(index + message.length).split('\n').map(function(line) { return line.trim(); });
+    stack = stack.substr(index + message.length).split('\n').map(function(line) {
+      return line.trim();
+    });
 
-    if (err.showDiff && sameType(actual, expected)) {
+    if(sameType(actual, expected)) {
       escape = false;
-      err.actual = actual = stringify(canonicalize(actual));
-      err.expected = expected = stringify(canonicalize(expected));
+      err.actual = actual = stringify(actual);
+      err.expected = expected = stringify(expected);
     }
 
     this.writeLine();
-    this.writeLine('%d) ' + color('error title', '%s'), i+1, test.fullTitle());
+    this.writeLine('%d) ' + color('error title', '%s'), i + 1, test.fullTitle());
     this.writeLine();
 
     this.indentation++;
@@ -195,7 +199,7 @@ Reporter.prototype.writeFailures = function(failures) {
     if(!test.timedOut) {
 
       // actual / expected diff
-      if ('string' == typeof actual && 'string' == typeof expected) {
+      if('string' == typeof actual && 'string' == typeof expected) {
         this.writeDiff(actual, expected, escape);
       }
 
@@ -204,26 +208,26 @@ Reporter.prototype.writeFailures = function(failures) {
       var isFilesBeforeTests = true, isTestFiles = true;
 
       stack
-          .filter(function (l) {
-            return l.length > 0;
-          })
-          .forEach(function (line, i) {
-            var fileName = parsedStack[i].getFileName(),
-                lineNumber = parsedStack[i].getLineNumber(),
-                columnNumber = parsedStack[i].getColumnNumber();
+        .filter(function(l) {
+          return l.length > 0;
+        })
+        .forEach(function(line, i) {
+          var fileName = parsedStack[i].getFileName(),
+            lineNumber = parsedStack[i].getLineNumber(),
+            columnNumber = parsedStack[i].getColumnNumber();
 
-            if(~this.files.indexOf(fileName)) {
-              isTestFiles = true;
-              isFilesBeforeTests = false;
-            } else {
-              isTestFiles = false;
-            }
+          if(~this.files.indexOf(fileName)) {
+            isTestFiles = true;
+            isFilesBeforeTests = false;
+          } else {
+            isTestFiles = false;
+          }
 
-            if((isTestFiles || isFilesBeforeTests) && (!this.options.stackExclude || !fileName.match(this.options.stackExclude))) {
-              this.writeLine(color('error stack', line));
-              this.writeStackLine(line, fileName, lineNumber, columnNumber);
-            }
-          }, this);
+          if((isTestFiles || isFilesBeforeTests) && (!this.options.stackExclude || !fileName.match(this.options.stackExclude))) {
+            this.writeLine(color('error stack', line));
+            this.writeStackLine(line, fileName, lineNumber, columnNumber);
+          }
+        }, this);
     }
 
     this.indentation--;
@@ -232,40 +236,15 @@ Reporter.prototype.writeFailures = function(failures) {
   this.indentation--;
 };
 
-Reporter.prototype.writeStackLineOld = function(line, fileName, lineNumber, columnNumber) {
-  if (lineNumber != null) {
-    if (!this.filesCache[fileName]) {
-      try {
-        this.filesCache[fileName] = fs.readFileSync(fileName, {encoding: 'utf8'}).split('\n');
-      } catch (e) {
-      }
-    }
-    if (this.filesCache[fileName]) {
-      var lines = this.filesCache[fileName];
-      var exactLine = lines[lineNumber - 1];
-      this.writeLine();
-      this.writeLine(color('pos', '%d') + ' | %s', lineNumber, exactLine);
-      if (columnNumber != null) {
-        var prefixLength = ('' + lineNumber + ' | ').length;
-        var padding = new Array(prefixLength + exactLine.length);
-        padding[prefixLength + columnNumber - 1] = color('pos', '^');
-        this.writeLine(padding.join(' '));
-      } else {
-        this.writeLine();
-      }
-    }
-  }
-}
-
 Reporter.prototype.writeStackLine = function(line, fileName, lineNumber, columnNumber) {
-  if (lineNumber != null) {
-    if (!this.filesCache[fileName]) {
+  if(lineNumber != null) {
+    if(!this.filesCache[fileName]) {
       try {
         this.filesCache[fileName] = fs.readFileSync(fileName, {encoding: 'utf8'}).split('\n');
-      } catch (e) {
+      } catch(e) {
       }
     }
-    if (this.filesCache[fileName]) {
+    if(this.filesCache[fileName]) {
       var lines = this.filesCache[fileName];
 
       this.writeLine();
@@ -273,11 +252,15 @@ Reporter.prototype.writeStackLine = function(line, fileName, lineNumber, columnN
       var linenums = [lineNumber - 2, lineNumber - 1, lineNumber];
 
       var longestLength = linenums
-        .filter(function(n) { return !!lines[n]})
+        .filter(function(n) {
+          return !!lines[n]
+        })
         .map(function(n) {
           return ('' + (n + 1)).length;
         })
-        .reduce(function(acc, n) { return Math.max(acc, n) });// O_O Omg
+        .reduce(function(acc, n) {
+          return Math.max(acc, n)
+        });// O_O Omg
 
       linenums.forEach(function(ln) {
         var line = lines[ln];
@@ -301,67 +284,32 @@ Reporter.prototype.writeStackLine = function(line, fileName, lineNumber, columnN
   }
 }
 
-function canonicalize(obj, stack) {
-  stack = stack || [];
-
-  if(stack.indexOf(obj) !== -1) return obj;
-
-  var canonicalizedObj;
-
-  if(Array.isArray(obj)) {
-    stack.push(obj);
-    canonicalizedObj = obj.map(function(item) {
-      return canonicalize(item, stack);
-    });
-    stack.pop();
-  } else if(typeof obj === 'object' && obj !== null) {
-    stack.push(obj);
-    canonicalizedObj = {};
-    Object.keys(obj).sort().forEach(function(key) {
-      canonicalizedObj[key] = canonicalize(obj[key], stack);
-    });
-    stack.pop();
-  } else {
-    canonicalizedObj = obj;
-  }
-
-  return canonicalizedObj;
-}
-
 Reporter.prototype.writeDiff = function(actual, expected, escape) {
-  function cleanUp(line) {
-    if (escape) {
-      line = escapeInvisibles(line);
-    }
-    if (line[0] === '+') return colorLines('diff added', line);
-    if (line[0] === '-') return colorLines('diff removed', line);
-    if (line.match(/\@\@/)) return null;
-    if (line.match(/\\ No newline/)) return null;
-    else return line;
-  }
-  function notBlank(line) {
-    return line != null;
-  }
-  var msg = diff.createPatch('string', actual, expected);
-  var lines = msg.split('\n').splice(4);
+  var d = diff.diffLines(actual, expected);
 
   this.writeLine();
-  this.writeLine(color('diff added', '+ expected') + ' ' + color('diff removed', '- actual'));
+  this.writeLine(color('diff added', 'expected') + ' ' + color('diff removed', 'actual'));
   this.writeLine();
 
-  lines.map(cleanUp).filter(notBlank).forEach(function(line) {
-    if(line.length)
+  d.forEach(function(part) {
+    var l = part.value;
+    var lines = l.split('\n');
+    lines.forEach(function(line) {
+      if(!line.length) return;
+      if(escape) line = escapeInvisibles(line);
+
+      line = part.added ? color('diff added', line) : part.removed ? color('diff removed', line) : line;
       this.writeLine(line);
+    }, this)
   }, this);
 };
 
 function stringify(obj) {
-  if(obj instanceof RegExp) return obj.toString();
-  return JSON.stringify(obj, null, 2);
+  return format(obj, {maxLineLength: 0, propSep: ''});
 }
 
 function sameType(a, b) {
-  return Object.prototype.toString.call(a) == Object.prototype.toString.call(b);
+  return getType(a) == getType(b);
 }
 
 function escapeInvisibles(line) {
@@ -371,7 +319,7 @@ function escapeInvisibles(line) {
 }
 
 function colorLines(name, str) {
-  return str.split('\n').map(function(str){
+  return str.split('\n').map(function(str) {
     return color(name, str);
   }).join('\n');
 }

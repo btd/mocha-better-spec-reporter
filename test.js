@@ -32,4 +32,8 @@ it('also contain test without suite', function() {
 
 it('should call function outside of tests', function() {
     b.boomFunction();
-})
+});
+
+it('should show diff if objects have the same type', function() {
+  assert.deepEqual({ a: { b: 'abc' }, d: 'abc', v: 'abc', z: 3}, { a: { b: '10' }, d: /abc/, v: 'adb', c: 11 });
+});
