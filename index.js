@@ -314,23 +314,24 @@ Reporter.prototype.writeStackLine = function(line, fileName, lineNumber, columnN
 }
 
 Reporter.prototype.writeDiff = function(actual, expected, escape) {
-  var d = diff.diffLines(actual, expected);
+  var lines = diff.createPatch('str', actual, expected).split('\n').slice(4);
 
   this.writeLine();
-  this.writeLine(color('diff added', 'expected') + ' ' + color('diff removed', 'actual'));
+  this.writeLine(color('diff added', '+ expected') + ' ' + color('diff removed', '- actual'));
   this.writeLine();
 
-  d.forEach(function(part) {
-    var l = part.value;
-    var lines = l.split('\n');
-    lines.forEach(function(line) {
-      if(!line.length) return;
-      if(escape) line = escapeInvisibles(line);
+  lines.forEach(function(line) {
+    if(!line.length) return;
+    var begining = line.substr(0, 1);
+    if(escape) line = escapeInvisibles(line);
+    var added = begining == '+';
+    var removed = begining == '-';
+    var usual = begining == ' ';
+    if(!added && !removed && !usual) return;
 
-      line = part.added ? color('diff added', line) : part.removed ? color('diff removed', line) : line;
-      this.writeLine(line);
-    }, this)
-  }, this);
+    line = added ? color('diff added', line) : removed ? color('diff removed', line) : line;
+    this.writeLine(line);
+  }, this)
 };
 
 function stringify(obj) {
