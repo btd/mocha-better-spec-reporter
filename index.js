@@ -56,7 +56,7 @@ function Reporter(runner, mochaOptions) {
   this.options = {};
 
   this.options = parseEnvOptions(this.options);
-  this.options = parseMochaReporterOptions(this.options, mochaOptions.reporterOptions);
+  this.options = parseMochaReporterOptions(this.options, mochaOptions.reporterOptions || {});
 
   var stats = this.stats = {suites: 0, tests: 0, passes: 0, pending: 0, failures: 0, timeouts: 0};
   var failures = this.failures = [];
@@ -339,7 +339,8 @@ function stringify(obj) {
 }
 
 function sameType(a, b) {
-  return getType(a) == getType(b);
+  var tA = getType(a), tB = getType(b);
+  return tA.type === tB.type && tA.cls === tB.cls && tA.sub === tB.sub;
 }
 
 function escapeInvisibles(line) {

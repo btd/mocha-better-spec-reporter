@@ -14,12 +14,12 @@
   "author": "Denis Bardadym <bardadymchik@gmail.com>",
   "license": "MIT",
   "dependencies": {
-    "chalk": "^0.5.1",
-    "diff": "^1.2.1",
-    "graceful-fs": "^3.0.4",
-    "minimatch": "^2.0.1",
-    "should-format": "0.0.7",
-    "should-type": "0.0.4",
+    "chalk": "1.0.0",
+    "diff": "1.2.1",
+    "graceful-fs": "3.0.8",
+    "minimatch": "2.0.1",
+    "should-format": "0.2.0",
+    "should-type": "0.1.1",
     "stack-trace": "0.0.9"
   },
   "devDependencies": {
