@@ -15,11 +15,11 @@
   "license": "MIT",
   "dependencies": {
     "chalk": "1.0.0",
-    "diff": "1.2.1",
+    "diff": "1.4.0",
     "graceful-fs": "3.0.8",
-    "minimatch": "2.0.1",
-    "should-format": "0.2.0",
-    "should-type": "0.1.1",
+    "minimatch": "2.0.8",
+    "should-format": "0.3.0",
+    "should-type": "0.2.0",
     "stack-trace": "0.0.9"
   },
   "devDependencies": {
