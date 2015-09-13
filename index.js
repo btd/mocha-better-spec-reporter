@@ -210,12 +210,6 @@ Reporter.prototype.writeFailures = function(failures) {
       return line.trim();
     });
 
-    if(sameType(actual, expected)) {
-      escape = false;
-      err.actual = actual = stringify(actual);
-      err.expected = expected = stringify(expected);
-    }
-
     this.writeLine();
     this.writeLine('%d) ' + color('error title', '%s'), i + 1, test.fullTitle());
     this.writeLine();
@@ -226,9 +220,19 @@ Reporter.prototype.writeFailures = function(failures) {
     }, this);
 
     if(!test.timedOut) {
+      var typeA = typeof actual, typeB = typeof expected;
+
+      //we do not stringify strings
+      if(sameType(actual, expected) && typeA !== 'string') {
+        escape = false;
+        actual = stringify(actual);
+        expected = stringify(expected);
+      }
 
       // actual / expected diff
-      if('string' == typeof actual && 'string' == typeof expected) {
+      // actual !== expected added because node assert assume actual and expected
+      // to be undefined maybe need more accurate check
+      if('string' === typeof actual && 'string' === typeof expected && actual !== expected) {
         this.writeDiff(actual, expected, escape);
       }
 
@@ -339,11 +343,13 @@ function stringify(obj) {
 }
 
 function sameType(a, b) {
-  return getType(a) == getType(b);
+  var tA = getType(a), tB = getType(b);
+  return tA.type === tB.type && tA.cls === tB.cls && tA.sub === tB.sub;
 }
 
 function escapeInvisibles(line) {
-  return line.replace(/\t/g, '<tab>')
+  return line
+    .replace(/\t/g, '<TAB>')
     .replace(/\r/g, '<CR>')
     .replace(/\n/g, '<LF>\n');
 }

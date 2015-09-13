@@ -37,3 +37,7 @@ it('should call function outside of tests', function() {
 it('should show diff if objects have the same type', function() {
   assert.deepEqual({ a: { b: 'abc' }, d: 'abc', v: 'abc', z: 3}, { a: { b: '10' }, d: /abc/, v: 'adb', c: 11 });
 });
+
+it('should show long lines nice', function() {
+  assert.equal('one\ntwo\ntree\ninvisibles\t\r\n','one\n\n');
+});
