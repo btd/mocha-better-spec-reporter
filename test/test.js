@@ -41,3 +41,13 @@ it('should show diff if objects have the same type', function() {
 it('should show long lines nice', function() {
   assert.equal('one\ntwo\ntree\ninvisibles\t\r\n','one\n\n');
 });
+
+var f = require('./test-func-sm-inline');
+it('should support inline source maps', function() {
+  f();
+});
+
+var f1 = require('./test-func-sm-external');
+it('should support external source maps', function() {
+  f1();
+});

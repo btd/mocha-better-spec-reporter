@@ -1,0 +1,1 @@
+{"version":3,"sources":["test-func.es6"],"names":[],"mappings":";;;;;qBAAwB,GAAG;;AAAZ,SAAS,GAAG,CAAC,SAAS,EAAE;AACrC,MAAG,CAAC,SAAS,EACX,MAAM,IAAI,KAAK,CAAC,KAAK,CAAC,CAAC;CAC1B","file":"test-func-sm-external.js","sourcesContent":["export default function abc(something) {\n  if(!something)\n    throw new Error('ES6');\n}\n"]}

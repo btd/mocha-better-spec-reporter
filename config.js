@@ -15,15 +15,16 @@ exports.symbols = symbols;
 
 exports.colors = {
 
-    'pending': 'yellow',
-    'pass': 'green',
+    'pending': 'yellow.bold',
+    'pass': 'green.bold',
     'fail': 'red.bold',
     'checkmark': 'magenta',
     'slow': 'red',
     'medium': 'yellow',
     'stat': 'blue',
-    'error title': 'underline',
-    'error stack': 'reset',
+    'error title': 'white.underline.bold',
+    'error stack': 'yellow',
+    'error stack source-map': 'magenta',
     'error message': 'cyan',
     'diff added': 'green',
     'diff removed': 'red',
@@ -34,10 +35,10 @@ exports.colors = {
 
     'suite title': 'bold.underline',
 
-    'option passed': 'magenta',
+    'option passed': 'magenta.bold',
     'test title passed': 'green',
 
-    'option pending': 'yellow',
+    'option pending': 'yellow.bold',
     'test title pending': 'yellow',
 
     'option failed': 'red.bold',

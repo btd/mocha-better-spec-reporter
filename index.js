@@ -1,8 +1,8 @@
-var chalk = require('chalk');
 var util = require('util');
 var diff = require('diff');
 var stacktrace = require('stack-trace');
 var fs = require('graceful-fs');
+var path = require('path');
 
 var minimatch = require('minimatch');
 
@@ -17,6 +17,10 @@ var formatTime = require('./time').formatTime;
 
 var pad = require('./pad');
 
+var SourceMapConsumer = require('source-map').SourceMapConsumer;
+
+var dataUriToBuffer = require('data-uri-to-buffer');
+
 function parseEnvOptions(opts) {
   var v = process.env.MOCHA_REPORTER_OPTS || '',
     s = process.env.MOCHA_REPORTER_STACK_EXCLUDE;
@@ -26,6 +30,7 @@ function parseEnvOptions(opts) {
   }
 
   opts.hideTitles = ~v.indexOf('hide-titles');
+  opts.hideStats = ~v.indexOf('hide-stats');
   opts.hideStats = ~v.indexOf('hide-stats');
 
   return opts;
@@ -44,6 +49,11 @@ function parseMochaReporterOptions(opts, reporterOptions) {
   if('show-back-order' in reporterOptions)
     opts.showFailsInBackOrder = reporterOptions['show-back-order'] === 'true';
 
+  if('show-file-content' in reporterOptions) {
+    opts.showSourceMapFiles = ~reporterOptions['show-file-content'].indexOf("sm")
+    opts.showJavascriptFiles = ~reporterOptions['show-file-content'].indexOf("js")
+  }
+
   return opts;
 }
 
@@ -53,10 +63,17 @@ function Reporter(runner, mochaOptions) {
 
   var that = this;
 
-  this.options = {};
+  this.options = {
+    showSourceMapFiles: true,
+    showFailsInBackOrder: true
+  };
 
   this.options = parseEnvOptions(this.options);
   this.options = parseMochaReporterOptions(this.options, mochaOptions.reporterOptions || {});
+
+  if(!this.options.showSourceMapFiles && !this.options.showJavascriptFiles) {
+    this.options.showJavascriptFiles = true;
+  }
 
   var stats = this.stats = {suites: 0, tests: 0, passes: 0, pending: 0, failures: 0, timeouts: 0};
   var failures = this.failures = [];
@@ -65,6 +82,7 @@ function Reporter(runner, mochaOptions) {
 
   this.files = mochaOptions.files;
   this.filesCache = {};
+  this.sourceMapCache = {};
 
   runner.on('start', function() {
     stats.start = new Date;
@@ -88,7 +106,7 @@ function Reporter(runner, mochaOptions) {
     }
   });
 
-  runner.on('test end', function(test) {
+  runner.on('test end', function() {
     stats.tests++;
   });
 
@@ -211,7 +229,7 @@ Reporter.prototype.writeFailures = function(failures) {
     });
 
     this.writeLine();
-    this.writeLine('%d) ' + color('error title', '%s'), i + 1, test.fullTitle());
+    this.writeLine(color('error title', '%d) %s'), i + 1, test.fullTitle());
     this.writeLine();
 
     this.indentation++;
@@ -232,7 +250,7 @@ Reporter.prototype.writeFailures = function(failures) {
       // actual / expected diff
       // actual !== expected added because node assert assume actual and expected
       // to be undefined maybe need more accurate check
-      if('string' === typeof actual && 'string' === typeof expected && actual !== expected) {
+      if('string' === typeA && 'string' === typeB && actual !== expected) {
         this.writeDiff(actual, expected, escape);
       }
 
@@ -257,7 +275,6 @@ Reporter.prototype.writeFailures = function(failures) {
           }
 
           if((isTestFiles || isFilesBeforeTests) && (!this.options.stackExclude || !minimatch(fileName, this.options.stackExclude))) {
-            this.writeLine(color('error stack', line));
             this.writeStackLine(line, fileName, lineNumber, columnNumber);
           }
         }, this);
@@ -269,52 +286,129 @@ Reporter.prototype.writeFailures = function(failures) {
   this.indentation--;
 };
 
+var sourceMapComment = "//# sourceMappingURL=";
+
+function linesContainSourceMap(lines) {
+  var l = lines.length;
+  while(l--) {
+    var line = lines[l].trim();
+    if(line !== '') {
+      if(line.substr(0, sourceMapComment.length) === sourceMapComment) {
+        return line.substr(sourceMapComment.length);
+      }
+    }
+  }
+}
+
+function parseInlineSourceMap(sm) {
+  if(sm.substr(0, 5) === 'data:') {
+    var buf = dataUriToBuffer(sm);
+    return new SourceMapConsumer(buf.toString());
+  }
+}
+
+function parseExternalSourceMap(filePath, sm) {
+  var smPath = path.resolve(path.dirname(filePath), sm);
+  try {
+    return new SourceMapConsumer(fs.readFileSync(smPath, {encoding: 'utf8'}));
+  } catch(e) {
+    return null;
+  }
+}
+
+Reporter.prototype._writeStackFilePosition = function(lines, pos) {
+  var ln = {};
+  ln[pos.line - 2] = lines[pos.line - 2];
+  ln[pos.line - 1] = lines[pos.line - 1];
+  ln[pos.line] = lines[pos.line];
+
+  this.writeLine();
+  this.writeFilePosition(ln, pos);
+  this.writeLine();
+}
+
 Reporter.prototype.writeStackLine = function(line, fileName, lineNumber, columnNumber) {
+  this.writeLine(color('error stack', line));
+
+  var pos = { line: lineNumber };
+  if(columnNumber) pos.column = columnNumber;
+
   if(lineNumber != null) {
-    if(!this.filesCache[fileName]) {
+    if(this.filesCache[fileName] === undefined) {
       try {
         this.filesCache[fileName] = fs.readFileSync(fileName, {encoding: 'utf8'}).split('\n');
       } catch(e) {
+        //do nothing
       }
     }
     if(this.filesCache[fileName]) {
       var lines = this.filesCache[fileName];
 
-      this.writeLine();
+      var sm = linesContainSourceMap(lines);
 
-      var linenums = [lineNumber - 2, lineNumber - 1, lineNumber];
+      if(this.options.showJavascriptFiles || !sm) {
+        this._writeStackFilePosition(lines, pos);
+      }
 
-      var longestLength = linenums
-        .filter(function(n) {
-          return !!lines[n]
-        })
-        .map(function(n) {
-          return ('' + (n + 1)).length;
-        })
-        .reduce(function(acc, n) {
-          return Math.max(acc, n)
-        });// O_O Omg
+      if(sm && this.options.showSourceMapFiles) {
+        var smc = this.sourceMapCache[fileName];
+        if(smc !== null) {
+          smc = parseInlineSourceMap(sm) || parseExternalSourceMap(fileName, sm);
+          this.sourceMapCache[fileName] = smc;
+        }
 
-      linenums.forEach(function(ln) {
-        var line = lines[ln];
+        if(smc) {
+          var posSM = smc.originalPositionFor(pos);
+          if(posSM.source) {
+            // i assume that inline source map contains all files content (or it will be useless, because files can be moved)
+            var fileContent = smc.sourceContentFor(posSM.source, true);
+            if(fileContent) {
+              this.indentation++;
 
-        if(line) {
-          if(ln + 1 == lineNumber) {
-            if(columnNumber) {
-              var lineBefore = line.substr(0, columnNumber - 1);
-              var lineAfter = line.substr(columnNumber);
-              line = lineBefore + color('error line pos', line[columnNumber - 1]) + lineAfter;
+              this.writeLine(color('error stack source-map', "at " + posSM.source + ":" + posSM.line + (posSM.column ? ":" + posSM.column: "")));
+
+              if(posSM.column) posSM.column++;
+              this._writeStackFilePosition(fileContent.split('\n'), posSM);
+
+              this.indentation--;
             }
-            this.writeLine('%s | %s', color('error line pos', pad('' + (ln + 1), longestLength)), line);
-          } else {
-            this.writeLine('%s | %s', pad('' + (ln + 1), longestLength), line);
           }
         }
-      }, this);
-
-      this.writeLine();
+      }
     }
   }
+}
+
+Reporter.prototype.writeFilePosition = function(lines, filePos) {
+  var linenums = Object.keys(lines).map(function(l) { return parseInt(l, 10); });
+
+  var longestLength = linenums
+    .filter(function(n) {
+      return !!lines[n]
+    })
+    .map(function(n) {
+      return ('' + (n + 1)).length;
+    })
+    .reduce(function(acc, n) {
+      return Math.max(acc, n)
+    });// O_O Omg
+
+  linenums.forEach(function(ln) {
+    var line = lines[ln];
+
+    if(line) {
+      if(ln + 1 == filePos.line) {
+        if(filePos.column) {
+          var lineBefore = line.substr(0, filePos.column - 1);
+          var lineAfter = line.substr(filePos.column);
+          line = lineBefore + color('error line pos', line[filePos.column - 1]) + lineAfter;
+        }
+        this.writeLine('%s | %s', color('error line pos', pad('' + (ln + 1), longestLength)), line);
+      } else {
+        this.writeLine('%s | %s', pad('' + (ln + 1), longestLength), line);
+      }
+    }
+  }, this);
 }
 
 Reporter.prototype.writeDiff = function(actual, expected, escape) {
@@ -354,10 +448,5 @@ function escapeInvisibles(line) {
     .replace(/\n/g, '<LF>\n');
 }
 
-function colorLines(name, str) {
-  return str.split('\n').map(function(str) {
-    return color(name, str);
-  }).join('\n');
-}
 
 module.exports = Reporter;
