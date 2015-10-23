@@ -4,7 +4,7 @@
   "description": "Just a bit better spec reporter for Mocha",
   "main": "index.js",
   "scripts": {
-    "test": "mocha -R ../../../ test.js"
+    "test": "mocha -R ../../../ test/*.js"
   },
   "keywords": [
     "mocha",
