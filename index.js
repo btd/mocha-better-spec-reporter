@@ -238,7 +238,7 @@ Reporter.prototype.writeFailures = function(failures) {
     }, this);
 
     if(!test.timedOut) {
-      var typeA = typeof actual, typeB = typeof expected;
+      var typeA = typeof actual;
 
       //we do not stringify strings
       if(sameType(actual, expected) && typeA !== 'string') {
@@ -250,7 +250,7 @@ Reporter.prototype.writeFailures = function(failures) {
       // actual / expected diff
       // actual !== expected added because node assert assume actual and expected
       // to be undefined maybe need more accurate check
-      if('string' === typeA && 'string' === typeB && actual !== expected) {
+      if(typeof actual === 'string' && typeof expected === 'string' && actual !== expected) {
         this.writeDiff(actual, expected, escape);
       }
 
