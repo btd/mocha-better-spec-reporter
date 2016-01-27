@@ -263,7 +263,7 @@ Reporter.prototype.writeFailures = function(failures) {
           return l.length > 0;
         })
         .forEach(function(line, i) {
-          var fileName = parsedStack[i].getFileName(),
+          var fileName = parsedStack[i].getFileName() || '[File not found]',
             lineNumber = parsedStack[i].getLineNumber(),
             columnNumber = parsedStack[i].getColumnNumber();
 
