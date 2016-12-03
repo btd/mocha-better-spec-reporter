@@ -21,6 +21,8 @@ It is possible to hide some parts of output via env variable `MOCHA_REPORTER_OPT
 
 `hide-stats` - will hide stat
 
+`clear-screen` - will clear the screen on start
+
 `show-back-order` - will show fails in back order
 
 ## Command line usage
@@ -35,6 +37,8 @@ You need to set options in such format A=B,C=D.... Options are:
 `hide-titles` accepted values `true`|`false` - show/hide executed test/suites titles (default `false`)
 
 `hide-stats` accepted values `true`|`false` - show/hide executed tests statistic (default `false`)
+
+`clear-screen` accepted values `true`|`false` - clear the screen before executing tests (default `false`)
 
 `show-back-order` accepted values `true`|`false` - test fails shown in back order, so first fail will be at the bottom (default `true`)
 

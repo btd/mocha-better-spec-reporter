@@ -31,7 +31,7 @@ function parseEnvOptions(opts) {
 
   opts.hideTitles = ~v.indexOf('hide-titles');
   opts.hideStats = ~v.indexOf('hide-stats');
-  opts.hideStats = ~v.indexOf('hide-stats');
+  opts.clearScreen = ~v.indexOf('clear-screen');
 
   return opts;
 }
@@ -42,6 +42,9 @@ function parseMochaReporterOptions(opts, reporterOptions) {
 
   if('hide-stats' in reporterOptions)
     opts.hideStats = reporterOptions['hide-stats'] === 'true';
+
+  if('clear-screen' in reporterOptions)
+    opts.clearScreen = reporterOptions['clear-screen'] === 'true';
 
   if('stack-exclude' in reporterOptions)
     opts.stackExclude = reporterOptions['stack-exclude'];
@@ -86,6 +89,10 @@ function Reporter(runner, mochaOptions) {
 
   runner.on('start', function() {
     stats.start = new Date;
+    if(that.options.clearScreen) {
+      process.stdout.write('\u001b[2J'); // clear screen.
+      process.stdout.write('\u001b[1;3H'); // set cursor position.
+    }
   });
 
   runner.on('suite', function(suite) {
