@@ -61,3 +61,8 @@ mocha -R mocha-better-spec-reporter --reporter-options hide-stats=true,hide-titl
 Screenshot
 ==========
 ![screenshot](https://cloud.githubusercontent.com/assets/334851/4676893/a6951042-55e0-11e4-812d-04fe09241d6a.png)
+
+Windows Users Note
+==================
+
+This reporter uses `chalk` for colors, which works very bad in windows environment (usually it just disable colors). If you are sure your terminal supports ansi colors (git for windows, cygwin, cmder, mingw/mingw64 etc)  you can force `chalk` to output colors with adding `--color` option to your argv. Also you can set env variable `FORCE_COLOR` to any value. 
